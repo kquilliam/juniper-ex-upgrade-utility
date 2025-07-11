@@ -101,10 +101,10 @@ def mount_oam_volume_via_ssh(host, user, ssh_password, root_password, timeout=30
                     raise TimeoutError(f"Timeout waiting for prompt(s): {prompts}")
                 time.sleep(0.1)
 
-        # Step 1: Wait for initial device CLI prompt.
+        # Wait for initial device CLI prompt.
         expect(chan, [">\n", "> ", "#\n", "# "], timeout=timeout)
 
-        # Step 2: Escalate to root shell.
+        # Escalate to root shell.
         chan.send("start shell user root\n")
         output = expect(chan, ["Password:", "password:"], timeout=timeout)
         if "Password" in output or "password" in output:
@@ -237,25 +237,22 @@ def repd_and_snapshot_cleanup(dev, member_ids, hostname, model):
             delete_remote_file(dev, target)
             # Delete /oam/snapshot/recovery.ufs.uzip
             delete_remote_file(dev, "/oam/snapshot/recovery.ufs.uzip")
-        try:
-            dev.rpc.cli("request system snapshot delete *")
-            print_status(f"Requested snapshot delete on switch {hostname}", "INFO")
-            dev.rpc.cli("request system snapshot recovery delete *")
-            print_status(f"Requested snapshot delete recovery on switch {hostname}", "INFO")
-        except Exception as e:
-            print_status(f"Snapshot cleanup failed for switch {hostname}", "ERROR")
-            sys.exit(1)
-    else:
-        if "EX4300" not in model:
+            try:
+                dev.rpc.cli("request system snapshot delete *")
+                print_status(f"Requested snapshot delete on switch {hostname}", "INFO")
+                dev.rpc.cli("request system snapshot recovery delete *")
+                print_status(f"Requested snapshot delete recovery on switch {hostname}", "INFO")
+            except Exception as e:
+                print_status(f"Snapshot cleanup failed for switch {hostname}", "ERROR")
+                sys.exit(1)
             print_status(f"Cleaning up VC Members on {hostname}", "INFO")
             for member_id in member_ids:
                 print_status(f"Cleanup on member {member_id}", "INFO")
                 target = f"fpc{member_id}:/var/log/shmlog/repd/*"
-                if "EX4300" not in model:
-                    print_status(f"Deleting logs on {target} ...", "INFO")
-                    delete_remote_file(dev, target)
-                    # Delete /oam/snapshot/recovery.ufs.uzip
-                    delete_remote_file(dev, "/oam/snapshot/recovery.ufs.uzip")
+                print_status(f"Deleting logs on {target} ...", "INFO")
+                delete_remote_file(dev, target)
+                # Delete /oam/snapshot/recovery.ufs.uzip
+                delete_remote_file(dev, "/oam/snapshot/recovery.ufs.uzip")
                 try:
                     dev.rpc.cli(f"request system snapshot delete * member {member_id}")
                     print_status(f"Requested snapshot delete on member {member_id}", "INFO")
@@ -508,8 +505,8 @@ def netbox_lookup_and_validation(serialnumber, model):
     """
     url = "https://<your-netbox>/api/dcim/devices"
     find_serial_url = f"{url}/?serial={serialnumber}"
-    nb_token = "<your-netbox-token>"
-    headers = {"Authorization": f"Token {nb_token}"}
+    <your-netbox-token> = "7febcffcfb9e51e84ea532d3c3443bbaee3286e2"
+    headers = {"Authorization": f"Token {<your-netbox-token>}"}
     print_status(f"Searching for Device in Netbox using Serial Number: {serialnumber}", "INFO")
     try:
         nb_device_response = requests.get(find_serial_url, headers=headers, verify=False)
@@ -559,7 +556,7 @@ def perform_software_upgrade(args, password, model, version, target_version, pkg
         model, version, target_version, pkg: Device/software details
     """
     pkg_filename = pkg.split('/')[-1]
-    pkg_url = f"http://<your-file-repo>/juniper/firmware/{pkg}"
+    pkg_url = f"http://<your-repo>/juniper/firmware/{pkg}"
     new_pkg = f"/.mount/oam/{pkg_filename}"
     print_status(f"Device needs to be upgraded to {target_version}", "INFO")
     with Device(host=args.host, user=args.user, passwd=password, normalize=True) as dev:
@@ -573,13 +570,13 @@ def perform_software_upgrade(args, password, model, version, target_version, pkg
             print_status("Installing Helper Packages", "INFO")
             try:
                 print_status("Installing OS Package", "INFO")
-                ok = sw.pkgadd(remote_package="http://<your-file-repo>/juniper/firmware/ex3400/os-package.tgz")
+                ok = sw.pkgadd(remote_package="http://<your-repo>/juniper/firmware/ex3400/os-package.tgz")
             except Exception as err:
                 print_status(f"Error installing OS package: {err}", "ERROR")
                 ok = False
             try:
                 print_status("Installing Package Hooks", "INFO")
-                ok = sw.pkgadd(remote_package="http://<your-file-repo>/juniper/firmware/ex3400/package-hooks-ex.tgz")
+                ok = sw.pkgadd(remote_package="http://<your-repo>/juniper/firmware/ex3400/package-hooks-ex.tgz")
             except Exception as err:
                 print_status(f"Error installing package hooks: {err}", "ERROR")
                 ok = False
@@ -590,10 +587,16 @@ def perform_software_upgrade(args, password, model, version, target_version, pkg
                 dev.rpc.file_copy(source=pkg_url, destination="/.mount/oam", dev_timeout=1800)
                 print_status(f"Installing {target_version} for {model}", "INFO")
                 ok, msg = sw.pkgadd(remote_package=new_pkg, unlink=True, force=True, dev_timeout=2100)
+                # If a reboot is required for install, treat as success
+                if not ok and msg and "WARNING: A reboot is required to install the software" in msg:
+                    ok = True
                 print_status(f"Install Complete: {msg}", "SUCCESS")
             else:
                 print_status(f"Installing {target_version} for {model}", "INFO")
-                ok, msg = sw.install(package=pkg_url, unlink=True )
+                ok, msg = sw.pkgadd(remote_package=pkg_url, unlink=True, dev_timeout=2100)
+                # If a reboot is required for install, treat as success
+                if not ok and msg and "WARNING: A reboot is required to install the software" in msg:
+                    ok = True
                 print_status(f"Install Complete: {msg}", "SUCCESS")
         except Exception as err:
             print_status(f"Error installing software: {err}", "ERROR")
@@ -618,6 +621,8 @@ def perform_software_upgrade(args, password, model, version, target_version, pkg
                     print_status(f"Failed to delete package-hooks-platform: {e}", "ERROR")
                     sys.exit(1)
                 print_status("Helper Packages Removed. Ready to reboot during scheduled window.", "SUCCESS")
+            else:
+                print_status("Ready to reboot during scheduled window.", "SUCCESS")
         else:
             print_status(f"Unable to install software: {msg}", "ERROR")
             sys.exit(1)
