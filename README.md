@@ -54,9 +54,10 @@ If `--root-password` is omitted, you will be prompted interactively.
 - `--user` (required): Username for login.
 - `--password`: Password (can omit for prompt).
 - `--root-password`: Root password for privileged shell operations (can omit for prompt). Required for OAM filesystem mounting.
-- `--check`: (default if neither --check nor --commit given) Review and print planned gigether migration configuration, but make NO changes.
-- `--commit`: Apply and commit gigether migration configuration, cleanup, and perform software upgrade if required.
-- `--no-cleanup`: Skip log and snapshot file cleanup stage.
+- `--check`: (default if neither --check nor --commit given) Review and print planned gigether migration configuration and show diffs, but make **NO changes**.<br>
+  **When `--check` is in effect, no cleanup (log, snapshot, or storage removal) or software installation/upgrade is performed.**
+- `--commit`: Apply and commit gigether migration configuration, perform cleanup, and upgrade software if required.
+- `--no-cleanup`: Skip log and snapshot file cleanup stage (meaningful only when not using `--check`).
 
 ### Examples
 
@@ -64,6 +65,7 @@ If `--root-password` is omitted, you will be prompted interactively.
 ```
 python upgrade_utility.py --host 192.0.2.1 --user admin --check
 ```
+> In `--check` mode, storage/log cleanup and software installation/upgrade are skipped—this mode is safe and non-destructive.
 
 **Apply migration, cleanup, and perform version upgrade (will commit changes as required):**
 ```
@@ -126,4 +128,3 @@ These steps ensure safe, auditable, and repeatable upgrades. The modular codebas
 ## Disclaimer
 
 Use at your own risk. Script provided as-is with no warranty. Always test in a lab environment before deploying in production.
-
