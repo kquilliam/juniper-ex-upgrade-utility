@@ -664,14 +664,20 @@ def main():
             # Use model, version, hostname, serialnumber already determined above
             member_ids = count_vchassis_members(dev, hostname)
             # --- Cleanup logs/snapshots unless --no-cleanup ---
-            cleanup_logs_and_snapshots(dev, member_ids, hostname, model, args.no_cleanup)
+            if not check_mode:
+                cleanup_logs_and_snapshots(dev, member_ids, hostname, model, args.no_cleanup)
+            else:
+                print_status("Check mode active: skipping cleanup of storage/logs.", "INFO")
             # --- GIGETHER migration workflow ---
             migrate_gigether_configs(dev, check_mode, commit_mode, hostname)
         # --- Query Netbox for version/package assignment ---
         target_version, pkg, vmhost, force_host = netbox_lookup_and_validation(serialnumber, model)
         # --- Upgrade if device version does not match Netbox assignment ---
         if version != target_version:
-            perform_software_upgrade(args, password, model, version, target_version, pkg)
+            if not check_mode:
+                perform_software_upgrade(args, password, model, version, target_version, pkg)
+            else:
+                print_status("Check mode active: skipping software install/upgrade.", "INFO")
         else:
             print_status(f"Device is already running version {version}", "INFO")
     except Exception as e:
